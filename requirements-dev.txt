@@ -1,0 +1,8 @@
+# xMemory Framework — Test dependencies
+pytest>=7.0
+pytest-cov>=4.0
+pytest-asyncio>=0.21
+psycopg[binary]>=3.1
+pgvector>=0.2
+numpy>=1.24
+pydantic>=2.0
