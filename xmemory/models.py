@@ -5,11 +5,13 @@ Data models for xMemory Framework.
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Memory(BaseModel):
     """A single memory unit."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: str
     text: str
@@ -21,9 +23,6 @@ class Memory(BaseModel):
     created_at: Optional[datetime] = None
     metadata: dict = Field(default_factory=dict)
     access_count: int = 0
-
-    class Config:
-        from_attributes = True
 
 
 class RecallResult(BaseModel):

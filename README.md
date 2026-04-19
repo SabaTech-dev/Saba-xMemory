@@ -72,9 +72,6 @@ from xmemory import MemoryBank
 bank = MemoryBank(
     bank_id="my-agent",
     db_url="postgresql://localhost/mydb",
-    llm_provider="openai",
-    llm_model="gpt-4o-mini",
-    embed_model="text-embedding-3-small"
 )
 
 # Retain a memory
@@ -83,26 +80,26 @@ bank.retain("User prefers dark mode in all applications")
 # Recall relevant memories
 results = bank.recall("What are the user's UI preferences?")
 for memory in results:
-    print(f"[{memory.confidence:.2f}] {memory.text}")
+    print(memory.text)
 
 # Get memory stats
 stats = bank.stats()
-print(f"Total memories: {stats.total}, Avg confidence: {stats.avg_confidence}")
+print(f"Total memories: {stats.total_memories}, Avg confidence: {stats.avg_confidence}")
 ```
 
 ## Core Features
 
-### 1. Semantic Deduplication
+### 1. Semantic Recall
 
-Automatically detects and removes semantically similar memories:
+Use lexical search immediately, or semantic search when embeddings are available:
 
 ```python
-# These will be deduplicated
-bank.retain("The project uses Python 3.11")
-bank.retain("Python 3.11 is used for the project")  # → duplicate detected, skipped
+bank.recall("Python 3.11")
+bank.recall(
+    "UI preferences",
+    query_embedding=[0.1] * 384,
+)
 ```
-
-**Result:** 11.45% memory reduction in production.
 
 ### 2. Confidence Scoring
 
@@ -118,16 +115,18 @@ high_confidence = [m for m in results if m.confidence >= 0.8]
 
 **Production stats:** Average confidence 0.953 across 11,687 memories.
 
-### 3. Temporal Invalidation
+### 3. Persistence and Filtering
 
-Memories are automatically archived when they become outdated:
+Memories can be stored with fact types, tags, and context:
 
 ```python
-bank.retain("Server is running version 2.1")  # Later...
-bank.retain("Server upgraded to version 2.3")  # → old memory archived
+bank.retain(
+    "Server is running version 2.1",
+    fact_type="world",
+    context="Deployment note",
+    tags=["ops", "server"],
+)
 ```
-
-**Production stats:** 29.86% of memories naturally archived.
 
 ### 4. Graph Traversal
 
@@ -135,30 +134,17 @@ Navigate related memories through a knowledge graph:
 
 ```sql
 SELECT * FROM graph_recall(
-  embedding => (SELECT embedding FROM memory_units WHERE id = 'target-id'),
-  bank_id => 'my-agent',
+  query_embedding => (SELECT embedding FROM memory_units WHERE id = 'target-id'),
+  query_bank_id => 'my-agent',
   top_k => 10,
   expansion_depth => 2,
   min_weight => 0.5
 );
 ```
 
-**Production stats:** 820,016 links (entity: 648K, temporal: 87K, semantic: 83K).
-
 ### 5. Cross-Session Consolidation
 
-Link memories across different agents and channels:
-
-```python
-# Agent A retains
-bank_a.retain("Database migration scheduled for Friday")
-
-# Agent B discovers the link
-results = bank_b.recall("any scheduled changes?")
-# → Finds the migration memory via cross-bank link
-```
-
-**Production stats:** 34,168 cross-bank links across 24 memory banks.
+The schema supports cross-bank linking through `memory_links`, but any higher-level consolidation workflow should be verified against the current code before relying on it.
 
 ## API Reference
 
@@ -166,14 +152,11 @@ results = bank_b.recall("any scheduled changes?")
 
 | Operation | Method | Description |
 |-----------|--------|-------------|
-| `recall` | POST | Semantic search with optional graph expansion |
-| `retain` | POST | Store new memories with automatic fact extraction |
+| `recall` | POST | Lexical search by default, semantic search when embeddings are provided |
+| `retain` | POST | Store new memories with fact type, context, tags, and optional embedding |
 | `list` | GET | List memories with filtering and pagination |
-| `consolidate` | POST | Trigger cross-bank consolidation |
 | `stats` | GET | Memory statistics (count, confidence, links) |
-| `graph` | GET | Knowledge graph visualization data |
-| `entities` | GET | Named entities extracted from memories |
-| `tags` | GET | Memory tags and categories |
+| `delete` | DELETE | Delete a memory by ID within the active bank |
 
 ### Memory Types
 
