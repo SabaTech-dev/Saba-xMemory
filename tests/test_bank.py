@@ -86,6 +86,55 @@ class TestRecall:
         result = bank.recall("test")
         assert result.latency_ms >= 0
 
+    def test_recall_without_embedding_uses_lexical_fallback(self, monkeypatch):
+        class FakeCursor:
+            def __init__(self):
+                self.executed = []
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def execute(self, query, params):
+                self.executed.append((query, params))
+
+            def fetchall(self):
+                return [
+                    (
+                        "123",
+                        "User prefers dark mode",
+                        "observation",
+                        None,
+                        "Settings",
+                        ["ui"],
+                        None,
+                        None,
+                        0,
+                        {},
+                    )
+                ]
+
+        class FakeConnection:
+            def __init__(self):
+                self.cursor_obj = FakeCursor()
+
+            def cursor(self):
+                return self.cursor_obj
+
+        fake_conn = FakeConnection()
+        bank = MB(bank_id="test-bank", db_url="postgresql://localhost/xmemory_test")
+        monkeypatch.setattr(bank, "_get_conn", lambda: fake_conn)
+
+        result = bank.recall("dark mode")
+
+        assert result.total == 1
+        assert result.memories[0].text == "User prefers dark mode"
+        query, params = fake_conn.cursor_obj.executed[0]
+        assert "ILIKE" in query
+        assert params[1] == "%dark mode%"
+
 
 # ─── List Tests ───────────────────────────────────────────────────────
 

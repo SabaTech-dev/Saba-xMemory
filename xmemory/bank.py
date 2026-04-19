@@ -11,7 +11,7 @@ from typing import Optional
 import psycopg
 from pgvector.psycopg import register_vector
 
-from xmemory.models import Memory, MemoryStats, RecallResult, RetainRequest, RetainResult
+from xmemory.models import Memory, MemoryStats, RecallResult, RetainResult
 
 
 class MemoryBank:
@@ -120,7 +120,7 @@ class MemoryBank:
         Semantic search for relevant memories.
 
         Uses vector similarity (cosine) for ranking.
-        Optionally expands results via graph traversal.
+        Falls back to lexical search when no embedding is provided.
         """
         start = time.time()
         conn = self._get_conn()
@@ -144,6 +144,44 @@ class MemoryBank:
                       AND embedding IS NOT NULL
                       {fact_filter}
                     ORDER BY embedding <=> %s
+                    LIMIT %s
+                    """,
+                    params,
+                )
+                for row in cur.fetchall():
+                    memories.append(
+                        Memory(
+                            id=str(row[0]),
+                            text=row[1],
+                            fact_type=row[2],
+                            confidence=float(row[3]) if row[3] else None,
+                            context=row[4] or "",
+                            tags=row[5] or [],
+                            mentioned_at=row[6],
+                            created_at=row[7],
+                            access_count=row[8] or 0,
+                            metadata=row[9] or {},
+                        )
+                    )
+        else:
+            with conn.cursor() as cur:
+                fact_filter = ""
+                like_query = f"%{query}%"
+                params: list = [self.bank_id, like_query, like_query, top_k]
+                if fact_types:
+                    placeholders = ",".join(["%s"] * len(fact_types))
+                    fact_filter = f" AND fact_type IN ({placeholders})"
+                    params = [self.bank_id, like_query, like_query] + fact_types + [top_k]
+
+                cur.execute(
+                    f"""
+                    SELECT id, text, fact_type, confidence_score, context,
+                           tags, mentioned_at, created_at, access_count, metadata
+                    FROM memory_units
+                    WHERE bank_id = %s
+                      AND (text ILIKE %s OR context ILIKE %s)
+                      {fact_filter}
+                    ORDER BY created_at DESC
                     LIMIT %s
                     """,
                     params,
