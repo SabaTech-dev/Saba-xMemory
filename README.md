@@ -1,27 +1,18 @@
-xMemory-framework
-=================
+# xMemory Framework — Persistent Semantic Memory for AI Agents
 
-Persistent semantic memory framework for AI agents — built on PostgreSQL + pgvector.
+![CI](https://github.com/SabaTech-dev/Saba-xMemory/workflows/CI/badge.svg)
+![Coverage](https://img.shields.io/codecov/c/github/SabaTech-dev/Saba-xMemory)
+![License](https://img.shields.io/badge/license-MIT-blue)
 
-> **Status:** Production-ready · Battle-tested with OpenClaw agents
+## Abstract
 
-## What is xMemory?
-
-xMemory is a framework for giving AI agents **long-term semantic memory**. It provides:
-
-- **Semantic Recall** — Find relevant memories using natural language queries with vector similarity
-- **Smart Retention** — Automatically extract facts from conversations (world knowledge, experiences, observations)
-- **Graph Traversal** — Navigate memory relationships with expandable graph queries
-- **Confidence Scoring** — Every memory has a confidence score that evolves over time
-- **Temporal Invalidation** — Automatically archive outdated memories
-- **Cross-Session Consolidation** — Link memories across different agents and channels
-- **Semantic Deduplication** — Eliminate redundant memories automatically
+xMemory is a production-grade semantic memory framework for AI agents, enabling persistent, retrievable, and evolvable knowledge storage. Unlike simple vector stores, xMemory implements a full memory lifecycle: retain, recall, consolidate, and evolve. Built on PostgreSQL with pgvector, it powers OpenClaw's multi-agent ecosystem with 11,712 memories across 820,016 knowledge links.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│                xMemory Framework                  │
+┌─────────────────────────────────────────────────────────┐
+│                  xMemory Framework                    │
 ├──────────────┬──────────────┬───────────────────┤
 │   Retain      │    Recall    │   Consolidate     │
 │  Pipeline     │   Pipeline   │    Pipeline        │
@@ -33,159 +24,28 @@ xMemory is a framework for giving AI agents **long-term semantic memory**. It pr
 ├──────────────┴──────────────┴───────────────────┤
 │              PostgreSQL + pgvector                │
 │         (embeddings, links, metadata)             │
-└─────────────────────────────────────────────────┘
+└─────────────────────────────────────────────────────────┘
 ```
 
-## Quick Start
+### Pipeline Overview
 
-### Prerequisites
+- **Retain**: Extract facts, filter noise, compute embeddings, store with confidence scores
+- **Recall**: Semantic search with embedding similarity, rerank with graph context
+- **Consolidate**: Build cross-bank knowledge links, deduplicate (11.45% rate), archive stale memories
+- **Evolve**: Periodic re-embedding, confidence decay, temporal invalidation
 
-- PostgreSQL 14+ with pgvector extension
-- An LLM API (OpenAI-compatible, Anthropic, or local via Ollama)
-- Embedding model (local or API)
+## Benchmarks
 
-### Installation
+| Benchmark | Result | Target | Status |
+|-----------|--------|--------|--------|
+| LoCoMo | 62.1% | 69.7% | ⚠️ -7.6% |
+| EverMemBench | 45.4% | 51.6% | ⚠️ -6.2% |
 
-```bash
-# Clone the repo
-git clone https://github.com/llllJokerllll/xMemory-framework.git
-cd xMemory-framework
-
-# Set up the database
-psql -f sql/schema.sql your_database
-
-# Configure
-cp .env.example .env
-# Edit .env with your API keys and database URL
-
-# Run the test suite
-pip install -r requirements.txt
-pytest tests/ -v
-```
-
-### Basic Usage
-
-```python
-from xmemory import MemoryBank
-
-# Initialize a memory bank
-bank = MemoryBank(
-    bank_id="my-agent",
-    db_url="postgresql://localhost/mydb",
-    llm_provider="openai",
-    llm_model="gpt-4o-mini",
-    embed_model="text-embedding-3-small"
-)
-
-# Retain a memory
-bank.retain("User prefers dark mode in all applications")
-
-# Recall relevant memories
-results = bank.recall("What are the user's UI preferences?")
-for memory in results:
-    print(f"[{memory.confidence:.2f}] {memory.text}")
-
-# Get memory stats
-stats = bank.stats()
-print(f"Total memories: {stats.total}, Avg confidence: {stats.avg_confidence}")
-```
-
-## Core Features
-
-### 1. Semantic Deduplication
-
-Automatically detects and removes semantically similar memories:
-
-```python
-# These will be deduplicated
-bank.retain("The project uses Python 3.11")
-bank.retain("Python 3.11 is used for the project")  # → duplicate detected, skipped
-```
-
-**Result:** 11.45% memory reduction in production.
-
-### 2. Confidence Scoring
-
-Every memory gets a confidence score (0.0–1.0) based on:
-- Recency and access frequency
-- Number of corroborating sources
-- Temporal stability
-
-```python
-results = bank.recall("deployment process")
-high_confidence = [m for m in results if m.confidence >= 0.8]
-```
-
-**Production stats:** Average confidence 0.953 across 11,687 memories.
-
-### 3. Temporal Invalidation
-
-Memories are automatically archived when they become outdated:
-
-```python
-bank.retain("Server is running version 2.1")  # Later...
-bank.retain("Server upgraded to version 2.3")  # → old memory archived
-```
-
-**Production stats:** 29.86% of memories naturally archived.
-
-### 4. Graph Traversal
-
-Navigate related memories through a knowledge graph:
-
-```sql
-SELECT * FROM graph_recall(
-  embedding => (SELECT embedding FROM memory_units WHERE id = 'target-id'),
-  bank_id => 'my-agent',
-  top_k => 10,
-  expansion_depth => 2,
-  min_weight => 0.5
-);
-```
-
-**Production stats:** 820,016 links (entity: 648K, temporal: 87K, semantic: 83K).
-
-### 5. Cross-Session Consolidation
-
-Link memories across different agents and channels:
-
-```python
-# Agent A retains
-bank_a.retain("Database migration scheduled for Friday")
-
-# Agent B discovers the link
-results = bank_b.recall("any scheduled changes?")
-# → Finds the migration memory via cross-bank link
-```
-
-**Production stats:** 34,168 cross-bank links across 24 memory banks.
-
-## API Reference
-
-### Memory Operations
-
-| Operation | Method | Description |
-|-----------|--------|-------------|
-| `recall` | POST | Semantic search with optional graph expansion |
-| `retain` | POST | Store new memories with automatic fact extraction |
-| `list` | GET | List memories with filtering and pagination |
-| `consolidate` | POST | Trigger cross-bank consolidation |
-| `stats` | GET | Memory statistics (count, confidence, links) |
-| `graph` | GET | Knowledge graph visualization data |
-| `entities` | GET | Named entities extracted from memories |
-| `tags` | GET | Memory tags and categories |
-
-### Memory Types
-
-| Type | Description | Use Case |
-|------|-------------|----------|
-| `world` | Factual knowledge | "PostgreSQL supports pgvector since v0.5.0" |
-| `experience` | Event-based memories | "Deployed v2.1 on April 16, had config issues" |
-| `observation` | Agent observations | "User tends to work late at night" |
+*Benchmarks run on Hindsight/xMemory adapter. See [benchmarks/](benchmarks/) for reproducible scripts.*
 
 ## Production Stats
 
-Collected from **6 months of continuous operation** with OpenClaw agents:
+6 months continuous operation with OpenClaw multi-agent system:
 
 | Metric | Value |
 |--------|-------|
@@ -194,52 +54,85 @@ Collected from **6 months of continuous operation** with OpenClaw agents:
 | Archived memories | 3,498 |
 | Knowledge links | 820,016 |
 | Cross-bank links | 34,168 |
-| Memory banks | 24 |
-| Avg confidence | 0.953 |
+| Avg confidence score | 0.953 |
 | Deduplication rate | 11.45% |
 | Archive rate | 29.86% |
 
-## Benchmarks
+## Quick Start
 
 ```bash
-# Run the benchmark suite
-python benchmarks/run_benchmarks.py
+# Clone repo
+git clone https://github.com/SabaTech-dev/Saba-xMemory.git
+cd Saba-xMemory
 
-# Results example:
-# Recall latency (p50): 45ms
-# Recall latency (p95): 120ms
-# Recall latency (p99): 280ms
-# Retain latency: 150ms (includes LLM extraction)
-# Deduplication accuracy: 94.2%
-# Graph expansion depth=2: +35% recall relevance
+# Setup PostgreSQL + pgvector
+docker-compose up -d
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run example
+python examples/basic_usage.py
 ```
 
-## Configuration
+## API Reference
 
-### Environment Variables
+### Operations
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `XMEMORY_DB_URL` | PostgreSQL connection string | Required |
-| `XMEMORY_LLM_PROVIDER` | LLM provider (openai, anthropic, ollama) | `openai` |
-| `XMEMORY_LLM_MODEL` | Model for fact extraction | `gpt-4o-mini` |
-| `XMEMORY_EMBED_MODEL` | Embedding model | `text-embedding-3-small` |
-| `XMEMORY_EMBED_DIMENSIONS` | Embedding dimensions | `384` |
-| `XMEMORY_RERANKER` | Reranker model (optional) | None |
-| `XMEMORY_CONFIDENCE_THRESHOLD` | Min confidence to keep | `0.3` |
-| `XMEMORY_DEDUP_THRESHOLD` | Similarity threshold for dedup | `0.92` |
-| `XMEMORY_ARCHIVE_DAYS` | Days before temporal check | `30` |
+| Operation | Method | Description |
+|-----------|--------|-------------|
+| `recall` | POST | Semantic search + graph expansion for relevant memories |
+| `retain` | POST | Store memories with fact extraction and confidence scoring |
+| `list` | GET | List memories with filters (by bank, confidence, time range) |
+| `stats` | GET | Get aggregate statistics (counts, confidence distribution) |
+| `graph` | GET | Retrieve knowledge graph data for visualization |
 
-## Contributing
+### Example: Recall
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+```python
+from xmemory import XMemoryClient
+
+client = XMemoryClient(db_url="postgresql://localhost/xmemory")
+
+results = client.recall(
+    query="What did we discuss about the database schema?",
+    limit=10,
+    min_confidence=0.7
+)
+
+for result in results:
+    print(f"{result['content'][:50]}... (confidence: {result['confidence']:.2f})")
+```
+
+## Data Flow
+
+```
+Input Text → LLM Extraction → Fact Filter → Embedding
+                                                           ↓
+                                        memory_units (store)
+                                                           ↓
+Query Text → Embedding + Rerank → Graph Expansion → Ranked Results
+                                                           ↓
+                                       memory_links (navigation)
+```
+
+## Roadmap
+
+### v1.1 (Next)
+- [ ] Improved LoCoMo score (target: 65%+)
+- [ ] Streaming recall for large result sets
+- [ ] Multi-modal memory (images, audio)
+
+### v1.2 (Future)
+- [ ] Federated memory across distributed agents
+- [ ] Automatic schema evolution
+- [ ] Memory export/import formats
+
+## Documentation
+
+- [Architecture](docs/architecture.md) - Detailed pipeline descriptions and schema reference
+- [Contributing](CONTRIBUTING.md) - Development setup and guidelines
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE) for details.
-
-## Acknowledgments
-
-- Built with [pgvector](https://github.com/pgvector/pgvector) for vector similarity search
-- Inspired by [Hindsight](https://github.com/vectorize-io/hindsight) memory system
-- Battle-tested with [OpenClaw](https://github.com/openclaw/openclaw) agent framework
+MIT License — see [LICENSE](LICENSE)
