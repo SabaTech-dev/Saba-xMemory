@@ -7,6 +7,17 @@ on:
     branches: [ main ]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Lint markdown files
+        run: |
+          pip install markdownlint-cli
+          markdownlint '**/*.md' '**/docs/**/*.md'
+
   test:
     runs-on: ubuntu-latest
     steps:
