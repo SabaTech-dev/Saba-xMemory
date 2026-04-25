@@ -62,6 +62,10 @@ xMemory is a production-grade semantic memory framework for AI agents, enabling 
 
 ```bash
 # Clone repo
+
+# See [CHANGELOG.md](CHANGELOG.md) for version history
+## Releases
+See [CHANGELOG.md](CHANGELOG.md) for version history
 git clone https://github.com/SabaTech-dev/Saba-xMemory.git
 cd Saba-xMemory
 
