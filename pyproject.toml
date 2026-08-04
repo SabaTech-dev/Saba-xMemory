@@ -51,6 +51,10 @@ Documentation = "https://github.com/llllJokerllll/xMemory-framework#readme"
 Repository = "https://github.com/llllJokerllll/xMemory-framework"
 Issues = "https://github.com/llllJokerllll/xMemory-framework/issues"
 
+[tool.setuptools.packages.find]
+include = ["xmemory*"]
+exclude = ["sql*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
