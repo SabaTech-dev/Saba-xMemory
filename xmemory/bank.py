@@ -8,6 +8,7 @@ import os
 import time
 from typing import Optional
 
+import numpy as np
 import psycopg
 from pgvector.psycopg import register_vector
 
@@ -97,7 +98,14 @@ class MemoryBank:
                 VALUES (%s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
-                (self.bank_id, content, fact_type, context, tags, embedding),
+                (
+                    self.bank_id,
+                    content,
+                    fact_type,
+                    context,
+                    tags,
+                    np.asarray(embedding, dtype=np.float32) if embedding is not None else None,
+                ),
             )
             row = cur.fetchone()
 
@@ -121,19 +129,31 @@ class MemoryBank:
 
         Uses vector similarity (cosine) for ranking.
         Optionally expands results via graph traversal.
+
+        Raises:
+            ValueError: if no query_embedding is provided and no embedding
+                provider is configured (silent empty results are never returned).
         """
         start = time.time()
         conn = self._get_conn()
         memories = []
 
+        if query_embedding is None:
+            raise ValueError(
+                "recall() was called without query_embedding. Semantic search "
+                "requires embeddings: pass query_embedding=[...], or configure "
+                "an embedding provider so embeddings are generated automatically."
+            )
+
         if query_embedding is not None:
+            query_vec = np.asarray(query_embedding, dtype=np.float32)
             with conn.cursor() as cur:
                 fact_filter = ""
-                params: list = [self.bank_id, query_embedding, top_k]
+                params: list = [self.bank_id, query_vec, top_k]
                 if fact_types:
                     placeholders = ",".join(["%s"] * len(fact_types))
                     fact_filter = f" AND fact_type IN ({placeholders})"
-                    params = [self.bank_id, query_embedding] + fact_types + [top_k]
+                    params = [self.bank_id, query_vec] + fact_types + [top_k]
 
                 cur.execute(
                     f"""

@@ -104,7 +104,7 @@ for mem in hits.memories:
 |--------|-------------|
 | `ensure_bank(mission)` | Create or update the memory bank |
 | `retain(content, fact_type, context, tags, embedding)` | Store a memory (direct store; LLM fact extraction not included) |
-| `recall(query, top_k, query_embedding, fact_types)` | Vector similarity search. Requires `query_embedding`; without it returns an empty result |
+| `recall(query, top_k, query_embedding, fact_types)` | Vector similarity search. Requires `query_embedding`; without it raises `ValueError` (never returns an empty result silently) |
 | `list_memories(limit, offset, ...)` | Paginated listing with filters |
 | `stats()` | Aggregate statistics (counts, confidence distribution) |
 | `delete(memory_id)` | Delete a memory |
