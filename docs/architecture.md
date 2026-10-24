@@ -1,5 +1,11 @@
 # xMemory Architecture
 
+> **Status note:** this document describes the target architecture. The
+> implemented core today covers Retain (direct store with optional embedding)
+> and Recall (pgvector similarity with a caller-provided embedding). The
+> Consolidate and Evolve pipelines, LLM fact extraction, embedding providers,
+> rerank, and graph expansion are roadmap items not yet present in `xmemory/`.
+
 ## Overview
 
 xMemory implements a complete memory lifecycle for AI agents, built on PostgreSQL with pgvector for semantic search.

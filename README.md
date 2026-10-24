@@ -6,7 +6,7 @@
 
 ## Abstract
 
-xMemory is a production-grade semantic memory framework for AI agents, enabling persistent, retrievable, and evolvable knowledge storage. Unlike simple vector stores, xMemory implements a full memory lifecycle: retain, recall, consolidate, and evolve. Built on PostgreSQL with pgvector, it powers OpenClaw's multi-agent ecosystem with 11,712 memories across 820,016 knowledge links.
+xMemory is a semantic memory framework for AI agents, enabling persistent, retrievable, and evolvable knowledge storage. Unlike simple vector stores, xMemory implements a memory lifecycle: retain, recall, and introspection (stats, listing, deletion). Built on PostgreSQL with pgvector, it has powered OpenClaw's multi-agent ecosystem in production.
 
 ## Architecture
 
@@ -29,23 +29,29 @@ xMemory is a production-grade semantic memory framework for AI agents, enabling 
 
 ### Pipeline Overview
 
-- **Retain**: Extract facts, filter noise, compute embeddings, store with confidence scores
-- **Recall**: Semantic search with embedding similarity, rerank with graph context
-- **Consolidate**: Build cross-bank knowledge links, deduplicate (11.45% rate), archive stale memories
-- **Evolve**: Periodic re-embedding, confidence decay, temporal invalidation
+- **Retain**: store memories with confidence scores and embeddings (implemented in `MemoryBank.retain`)
+- **Recall**: semantic search with embedding similarity (implemented in `MemoryBank.recall`)
+- **Introspection**: listing, aggregate stats, deletion (`list_memories`, `stats`, `delete`)
+- **Consolidate** (roadmap): cross-bank knowledge links, deduplication, stale-memory archive — not yet implemented in this library
+- **Evolve** (roadmap): periodic re-embedding, confidence decay, temporal invalidation — not yet implemented in this library
 
 ## Benchmarks
 
-| Benchmark | Result | Target | Status |
-|-----------|--------|--------|--------|
-| LoCoMo | 62.1% | 69.7% | ⚠️ -7.6% |
-| EverMemBench | 45.4% | 51.6% | ⚠️ -6.2% |
+> ⚠️ **Historical results — not reproducible from this repository.** The numbers
+> below come from a previous internal evaluation (Hindsight/xMemory adapter,
+> October 2026). The scripts in [benchmarks/](benchmarks/) are placeholders
+> pending a public, self-contained benchmark harness. Do not treat them as
+> current claims.
 
-*Benchmarks run on Hindsight/xMemory adapter. See [benchmarks/](benchmarks/) for reproducible scripts.*
+| Benchmark | Historical result | Target |
+|-----------|-------------------|--------|
+| LoCoMo | 62.1% | 69.7% |
+| EverMemBench | 45.4% | 51.6% |
 
-## Production Stats
+## Historical Production Stats
 
-6 months continuous operation with OpenClaw multi-agent system:
+Deployed in the OpenClaw multi-agent system (private deployment, snapshot as of
+October 2026). These figures describe that deployment, not this package:
 
 | Metric | Value |
 |--------|-------|
@@ -61,64 +67,75 @@ xMemory is a production-grade semantic memory framework for AI agents, enabling 
 ## Quick Start
 
 ```bash
-# Clone repo
-
-# See [CHANGELOG.md](CHANGELOG.md) for version history
-## Releases
-See [CHANGELOG.md](CHANGELOG.md) for version history
 git clone https://github.com/SabaTech-dev/Saba-xMemory.git
 cd Saba-xMemory
 
-# Setup PostgreSQL + pgvector
-docker-compose up -d
+# Requires PostgreSQL with pgvector and pg_trgm extensions
+# Apply the schema:
+psql "$DATABASE_URL" -f sql/schema.sql
+psql "$DATABASE_URL" -f sql/functions.sql
 
-# Install dependencies
-pip install -r requirements.txt
+# Install
+pip install -e .
+```
 
-# Run example
-python examples/basic_usage.py
+```python
+from xmemory import MemoryBank
+
+bank = MemoryBank(bank_id="my-agent", db_url="postgresql://localhost/xmemory")
+bank.ensure_bank(mission="Assistant memory")
+
+result = bank.retain("The user prefers PostgreSQL for analytics workloads")
+print(result.id, result.fact_type)
+
+hits = bank.recall(
+    query="which database does the user prefer?",
+    top_k=5,
+)
+for mem in hits.memories:
+    print(mem.text, mem.confidence)
 ```
 
 ## API Reference
 
-### Operations
+`xmemory.MemoryBank` — Python API over PostgreSQL + pgvector:
 
-| Operation | Method | Description |
-|-----------|--------|-------------|
-| `recall` | POST | Semantic search + graph expansion for relevant memories |
-| `retain` | POST | Store memories with fact extraction and confidence scoring |
-| `list` | GET | List memories with filters (by bank, confidence, time range) |
-| `stats` | GET | Get aggregate statistics (counts, confidence distribution) |
-| `graph` | GET | Retrieve knowledge graph data for visualization |
+| Method | Description |
+|--------|-------------|
+| `ensure_bank(mission)` | Create or update the memory bank |
+| `retain(content, fact_type, context, tags, embedding)` | Store a memory (direct store; LLM fact extraction not included) |
+| `recall(query, top_k, query_embedding, fact_types)` | Vector similarity search. Requires `query_embedding`; without it returns an empty result |
+| `list_memories(limit, offset, ...)` | Paginated listing with filters |
+| `stats()` | Aggregate statistics (counts, confidence distribution) |
+| `delete(memory_id)` | Delete a memory |
 
 ### Example: Recall
 
 ```python
-from xmemory import XMemoryClient
+from xmemory import MemoryBank
 
-client = XMemoryClient(db_url="postgresql://localhost/xmemory")
+bank = MemoryBank(bank_id="my-agent", db_url="postgresql://localhost/xmemory")
 
-results = client.recall(
+result = bank.recall(
     query="What did we discuss about the database schema?",
-    limit=10,
-    min_confidence=0.7
+    top_k=10,
+    query_embedding=embed(query),  # provide your own embedding vector
 )
 
-for result in results:
-    print(f"{result['content'][:50]}... (confidence: {result['confidence']:.2f})")
+for mem in result.memories:
+    print(f"{mem.text[:50]}... (confidence: {mem.confidence})")
 ```
 
-## Data Flow
+## Data Flow (implemented core)
 
 ```
-Input Text → LLM Extraction → Fact Filter → Embedding
-                                                           ↓
-                                        memory_units (store)
-                                                           ↓
-Query Text → Embedding + Rerank → Graph Expansion → Ranked Results
-                                                           ↓
-                                       memory_links (navigation)
+Input Text ──────────────────────► memory_units (store, with optional embedding)
+                                                 │
+Query Embedding ──► Vector Similarity (pgvector) ─┘──► Ranked Results
 ```
+
+Planned stages not yet in the library: LLM fact extraction, embedding providers,
+rerank, graph expansion, `memory_links` navigation (schema exists in `sql/`).
 
 ## Roadmap
 
