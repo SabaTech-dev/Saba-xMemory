@@ -7,7 +7,7 @@ with semantic recall, confidence scoring, deduplication, and graph traversal.
 
 __version__ = "1.0.0"
 __author__ = "Jose Manuel Sabarís García"
-__license__ = "Apache-2.0"
+__license__ = "MIT"
 
 from xmemory.bank import MemoryBank
 from xmemory.models import Memory, MemoryStats, RecallResult
