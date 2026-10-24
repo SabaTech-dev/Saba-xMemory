@@ -46,7 +46,7 @@ ANSWER_MODEL = os.environ.get("XM_BENCH_MODEL", "mi-qwen38-27b-coldfusion-q4km")
 JUDGE_MODEL = os.environ.get("XM_JUDGE_MODEL", ANSWER_MODEL)
 EMBED_MODEL = os.environ.get("XM_EMBED_MODEL", "mi-nomic-embed-text-v2-moe")
 
-TOP_K = 20
+TOP_K = int(os.environ.get("XM_TOP_K", "20"))
 EMBED_DIM = 768
 
 ANSWER_PROMPT = """Here are memories from past conversations.
@@ -55,7 +55,11 @@ ANSWER_PROMPT = """Here are memories from past conversations.
 
 Question: {question}
 {options_block}
-Reply with just the answer: a short phrase, a date, a name, a number, or the option text."""
+Reply with just the answer: a short phrase, a date, a name, a number, or the option text.
+The name before each "|" in a memory line is who said it — do not attribute one speaker's words or experiences to anyone else.
+For dates and times, convert relative expressions ("last Saturday", "next month") into the absolute date, using the timestamp shown in the memory line.
+If the question asks about one specific person, check the memories actually describe that person; if they only describe a different person doing that thing, reply: Not mentioned.
+For questions about likelihood, preferences, traits or opinions, answer with the most reasonable inference from the memories — the evidence is often indirect, so reason from what is there; only reply "Not mentioned" when truly nothing relevant exists."""
 
 
 def llm_client() -> OpenAI:

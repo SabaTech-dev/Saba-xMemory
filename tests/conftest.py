@@ -1,9 +1,17 @@
 """
 Pytest fixtures for xMemory tests.
 """
+
 import pytest
 from typing import Dict, Any
 from unittest.mock import MagicMock
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_embedding_provider(monkeypatch):
+    """Tests must never depend on ambient credentials: disable the embedding
+    provider auto-detect chain unless a test sets it explicitly."""
+    monkeypatch.setenv("XMEMORY_EMBEDDING_PROVIDER", "none")
 
 
 @pytest.fixture
@@ -16,7 +24,7 @@ def sample_memory() -> Dict[str, Any]:
         "confidence": 0.85,
         "bank_id": "test_agent",
         "created_at": "2024-01-01T00:00:00Z",
-        "archived_at": None
+        "archived_at": None,
     }
 
 
@@ -30,7 +38,7 @@ def sample_memory_low_confidence() -> Dict[str, Any]:
         "confidence": 0.45,
         "bank_id": "test_agent",
         "created_at": "2024-01-01T00:00:00Z",
-        "archived_at": None
+        "archived_at": None,
     }
 
 
@@ -44,7 +52,7 @@ def sample_duplicate_memory() -> Dict[str, Any]:
         "confidence": 0.87,
         "bank_id": "test_agent",
         "created_at": "2024-01-01T01:00:00Z",
-        "archived_at": None
+        "archived_at": None,
     }
 
 
@@ -56,7 +64,7 @@ def sample_link() -> Dict[str, Any]:
         "source_id": "550e8400-e29b-41d4-a716-446655440000",
         "target_id": "550e8400-e29b-41d4-a716-446655440001",
         "link_type": "entity",
-        "confidence": 0.9
+        "confidence": 0.9,
     }
 
 

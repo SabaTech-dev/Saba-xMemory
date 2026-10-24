@@ -104,7 +104,7 @@ for mem in hits.memories:
 |--------|-------------|
 | `ensure_bank(mission)` | Create or update the memory bank |
 | `retain(content, fact_type, context, tags, embedding)` | Store a memory. `embedding` optional when an embedding provider is configured (auto-generated) |
-| `recall(query, top_k, query_embedding, fact_types)` | Vector similarity search. Without `query_embedding` it uses the configured provider; with no provider at all it raises `ValueError` (never returns an empty result silently) |
+| `recall(query, top_k, query_embedding, fact_types, search)` | Hybrid ranking: vector similarity fused with full-text search (RRF). `search="auto"` (default) degrades to full-text when no embedding is available; `search="vector"` requires an embedding and raises `ValueError` otherwise; `search="text"` is full-text only |
 | `list_memories(limit, offset, ...)` | Paginated listing with filters |
 | `stats()` | Aggregate statistics (counts, confidence distribution) |
 | `delete(memory_id)` | Delete a memory |

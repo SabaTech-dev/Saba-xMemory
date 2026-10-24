@@ -21,12 +21,15 @@ Cita del mensaje de aprobación (Fase 2, card workboard 60c0005f-4703-4799-b853-
 
 ## Tasks
 
-- T1 (S1, inline): fallback/error de `recall` sin embedding + tests RED→GREEN. [pendiente]
-- T2 (S2, inline): módulo `xmemory/embeddings.py` — protocolo provider + Ollama + OpenAI + fallback local determinista; integración en `recall`/`retain`. [pendiente]
-- T3 (S3, inline): `benchmarks/` real — descarga datasets, ingest, eval, judge LLM; scripts ejecutables; baseline medido y guardado. [pendiente]
-- T4 (S4, inline): iteraciones de optimización sobre baseline medido o informe de límite estructural. [pendiente]
+- T1 (S1, inline): fallback/error de `recall` sin embedding + tests RED→GREEN. [completado — commit a07e1fd; además se arregló el path vectorial (listas → ndarray) que nunca se había ejecutado; 24 passed]
+- T2 (S2, inline): módulo `xmemory/embeddings.py` — protocolo provider + Ollama + OpenAI + fallback local determinista; integración en `recall`/`retain`. [completado — commit 6c30a3f; 32 passed]
+- T3 (S3, inline): `benchmarks/` real — descarga datasets, ingest, eval, judge LLM; scripts ejecutables; baseline medido y guardado. [completado — commit 78eab78; smoke LoCoMo baseline 30.65% → con mejoras del harness 59.8% (ver T4)]
+- T4 (S4, inline): iteraciones de optimización sobre baseline medido o informe de límite estructural. [en curso]
 
 ## Log
 
 - L1 (2026-10-24): Request original (inter-session de Alfred, card 60c0005f): "Fase 2 aprobada... Tu F1 cambió el plan: los benchmarks eran stubs..." — texto completo en S0 arriba.
-- L1b (2026-10-24): Entorno verificado: Postgres local con extensión vector OK; DB `xmemory_test` ya existía con schema aplicado (4 tablas); rol `xmemory` creado con password; venv con deps OK; baseline 22/22 passed. OPENAI_API_KEY disponible para judge del harness. Ollama no corre en este server.
+- L1b (2026-10-24): Entorno verificado: Postgres local con extensión vector OK; DB `xmemory_test` ya existía con schema aplicado (4 tablas); rol `xmemory` creado con password; venv con deps OK; baseline 22/22 passed. OPENAI_API_KEY disponible para judge del harness.
+- L2 (2026-10-24): OPENAI_API_KEY sin créditos (429 insufficient_quota) → harness reconfigurado a endpoints locales: LiteLLM :4000 (chat mi-qwen38-27b-coldfusion-q4km, embeddings mi-nomic-embed-text-v2-moe 768 dims). Creada DB `xmemory_bench` con schema variante vector(768) (benchmarks/schema768.sql). Coste por corrida: $0 (infra local).
+- L3 (2026-10-24): Prompt-engineering del harness medido en smoke (conv-26, 199 QA): strict prompt 9% → minimal 30.65% → judge semántico 30.65%→(mejora scoring) → reglas hablante+fechas 44.7% → guard atribución 53.8% → guard suavizado + inferencia 56.8% → 59.8%. top_k=30 degradó a 39.2% (ruido de contexto en Qwen 27B; precisión > recall) — top_k=20 se queda como default.
+- L4 (2026-10-24): Deuda #1 resuelta como FALLBACK SENSATO (S1 permitía error o fallback): recall() ahora es híbrido (vector + full-text RRF); sin embedding disponible degrada a full-text (never silent-empty); search="vector" explícito sigue lanzando ValueError. Tests 33 passed (test_recall_vector_search_without_embedding_raises + test_recall_text_fallback_fulltext).

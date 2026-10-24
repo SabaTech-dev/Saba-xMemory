@@ -153,44 +153,83 @@ class MemoryBank:
         top_k: int = 10,
         query_embedding: Optional[list[float]] = None,
         fact_types: Optional[list[str]] = None,
+        search: str = "auto",
     ) -> RecallResult:
         """
         Semantic search for relevant memories.
 
-        Uses vector similarity (cosine) for ranking.
-        Optionally expands results via graph traversal.
+        search modes:
+            "auto"   — hybrid ranking (vector similarity fused with full-text
+                       search via Reciprocal Rank Fusion). The vector leg is
+                       skipped when no embedding is available (no argument and
+                       no resolvable provider), falling back to full-text only.
+            "vector" — vector similarity only; requires an embedding
+                       (raises ValueError when none is available).
+            "text"   — full-text search only.
 
-        Raises:
-            ValueError: if no query_embedding is provided and no embedding
-                provider is configured (silent empty results are never returned).
+        Optionally filters by fact_types.
         """
         start = time.time()
         conn = self._get_conn()
         memories = []
 
-        if query_embedding is None:
-            query_embedding = self._embed(query)
-        if query_embedding is None:
-            raise ValueError(
-                "recall() was called without query_embedding. Semantic search "
-                "requires embeddings: pass query_embedding=[...], or configure "
-                "an embedding provider so embeddings are generated automatically."
-            )
+        if search not in ("auto", "vector", "text"):
+            search = "auto"
 
-        if query_embedding is not None:
-            query_vec = np.asarray(query_embedding, dtype=np.float32)
-            with conn.cursor() as cur:
-                fact_filter = ""
-                params: list = [self.bank_id, query_vec, top_k]
-                if fact_types:
-                    placeholders = ",".join(["%s"] * len(fact_types))
-                    fact_filter = f" AND fact_type IN ({placeholders})"
-                    params = [self.bank_id, query_vec] + fact_types + [top_k]
+        want_vector = search in ("auto", "vector")
+        want_text = search in ("auto", "text")
 
+        if want_vector:
+            if query_embedding is None:
+                query_embedding = self._embed(query)
+            if query_embedding is None:
+                if search == "vector":
+                    raise ValueError(
+                        "recall(search='vector') requires an embedding: pass "
+                        "query_embedding=[...] or configure an embedding provider."
+                    )
+                want_vector = False  # auto mode: degrade to full-text
+
+        candidate_k = max(top_k * 3, 30)
+        fact_filter = ""
+        fact_params: list = []
+        if fact_types:
+            placeholders = ",".join(["%s"] * len(fact_types))
+            fact_filter = f" AND fact_type IN ({placeholders})"
+            fact_params = list(fact_types)
+
+        ranked: dict[str, tuple[float, Memory]] = {}
+
+        def add_leg(rows: list, weight: float = 1.0) -> None:
+            for rank, row in enumerate(rows):
+                mem = Memory(
+                    id=str(row[0]),
+                    text=row[1],
+                    fact_type=row[2],
+                    confidence=float(row[3]) if row[3] else None,
+                    context=row[4] or "",
+                    tags=row[5] or [],
+                    mentioned_at=row[6],
+                    created_at=row[7],
+                    access_count=row[8] or 0,
+                    metadata=row[9] or {},
+                )
+                rrf = 1.0 / (60.0 + rank + 1)
+                key = mem.id
+                score, prev = ranked.get(key, (0.0, mem))
+                ranked[key] = (score + weight * rrf, prev or mem)
+
+        select_cols = """
+            id, text, fact_type, confidence_score, context,
+            tags, mentioned_at, created_at, access_count, metadata
+        """
+
+        with conn.cursor() as cur:
+            if want_vector and query_embedding is not None:
+                query_vec = np.asarray(query_embedding, dtype=np.float32)
                 cur.execute(
                     f"""
-                    SELECT id, text, fact_type, confidence_score, context,
-                           tags, mentioned_at, created_at, access_count, metadata
+                    SELECT {select_cols}
                     FROM memory_units
                     WHERE bank_id = %s
                       AND embedding IS NOT NULL
@@ -198,23 +237,35 @@ class MemoryBank:
                     ORDER BY embedding <=> %s
                     LIMIT %s
                     """,
-                    params,
+                    [self.bank_id, query_vec] + fact_params + [candidate_k],
                 )
-                for row in cur.fetchall():
-                    memories.append(
-                        Memory(
-                            id=str(row[0]),
-                            text=row[1],
-                            fact_type=row[2],
-                            confidence=float(row[3]) if row[3] else None,
-                            context=row[4] or "",
-                            tags=row[5] or [],
-                            mentioned_at=row[6],
-                            created_at=row[7],
-                            access_count=row[8] or 0,
-                            metadata=row[9] or {},
-                        )
-                    )
+                add_leg(cur.fetchall())
+
+            if want_text:
+                # OR-of-words full-text over text + context (speaker/date live
+                # in context); ts_rank_cd favors turns matching more terms.
+                or_query = (
+                    " OR ".join(w for w in query.replace("'", " ").split() if len(w) > 2) or query
+                )
+                cur.execute(
+                    f"""
+                    SELECT {select_cols}
+                    FROM memory_units
+                    WHERE bank_id = %s
+                      AND to_tsvector('english', coalesce(text, '') || ' ' || coalesce(context, ''))
+                          @@ websearch_to_tsquery('english', %s)
+                      {fact_filter}
+                    ORDER BY ts_rank_cd(
+                        to_tsvector('english', coalesce(text, '') || ' ' || coalesce(context, '')),
+                        websearch_to_tsquery('english', %s)) DESC
+                    LIMIT %s
+                    """,
+                    [self.bank_id, or_query, or_query] + fact_params + [candidate_k],
+                )
+                add_leg(cur.fetchall())
+
+        fused = sorted(ranked.items(), key=lambda kv: kv[1][0], reverse=True)[:top_k]
+        memories = [mem for _, (_, mem) in fused]
 
         elapsed = (time.time() - start) * 1000
         return RecallResult(
