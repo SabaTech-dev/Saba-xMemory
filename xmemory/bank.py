@@ -12,6 +12,7 @@ import numpy as np
 import psycopg
 from pgvector.psycopg import register_vector
 
+from xmemory.embeddings import EmbeddingProvider, HashEmbeddingProvider, get_provider
 from xmemory.models import Memory, MemoryStats, RecallResult, RetainRequest, RetainResult
 
 
@@ -26,6 +27,12 @@ class MemoryBank:
         )
         bank.retain("User prefers dark mode")
         results = bank.recall("UI preferences")
+
+    Embeddings: pass ``embedding_provider`` explicitly, or let the local-first
+    default chain resolve one (see ``xmemory.embeddings``). When a provider is
+    available, ``retain``/``recall`` generate embeddings automatically; without
+    one, calls that need an embedding fail with an explicit ``ValueError``
+    instead of returning empty results silently.
     """
 
     def __init__(
@@ -33,11 +40,32 @@ class MemoryBank:
         bank_id: str,
         db_url: Optional[str] = None,
         embedding_dim: int = 384,
+        embedding_provider: Optional[EmbeddingProvider] = None,
     ):
         self.bank_id = bank_id
         self.db_url = db_url or os.environ.get("XMEMORY_DB_URL", "")
         self.embedding_dim = embedding_dim
+        self._provider: Optional[EmbeddingProvider] = embedding_provider
         self._conn: Optional[psycopg.Connection] = None
+
+    @property
+    def embedding_provider(self) -> Optional[EmbeddingProvider]:
+        """Resolved embedding provider, lazily via the default chain."""
+        if self._provider is None:
+            try:
+                self._provider = get_provider()
+            except ValueError:
+                return None
+            self._provider._validate_dim(self.embedding_dim)
+        return self._provider
+
+    def _embed(self, text: str) -> Optional[list[float]]:
+        """Embed text via the resolved provider; None if no provider is available."""
+        provider = self.embedding_provider
+        if provider is None:
+            return None
+        provider._validate_dim(self.embedding_dim)
+        return provider.embed(text)
 
     # ─── Connection Management ────────────────────────────────────────
 
@@ -90,6 +118,8 @@ class MemoryBank:
         """
         conn = self._get_conn()
         tags = tags or []
+        if embedding is None:
+            embedding = self._embed(content)
 
         with conn.cursor() as cur:
             cur.execute(
@@ -138,6 +168,8 @@ class MemoryBank:
         conn = self._get_conn()
         memories = []
 
+        if query_embedding is None:
+            query_embedding = self._embed(query)
         if query_embedding is None:
             raise ValueError(
                 "recall() was called without query_embedding. Semantic search "

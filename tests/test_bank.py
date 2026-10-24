@@ -86,9 +86,12 @@ class TestRecall:
         result = bank.recall("test", query_embedding=self.EMBED)
         assert isinstance(result.memories, list)
 
-    def test_recall_without_embedding_raises(self, bank):
-        """Calling recall() without query_embedding must fail loudly, never return empty silently."""
-        bank.retain("Recall fallback probe: user prefers dark mode")
+    def test_recall_without_embedding_raises(self, bank, monkeypatch):
+        """Without any resolvable provider, calling recall() without query_embedding
+        must fail loudly, never return empty silently."""
+        monkeypatch.setenv("XMEMORY_EMBEDDING_PROVIDER", "none")
+        bank._provider = None  # drop any cached provider for this scenario
+        bank.retain("Recall fallback probe: user prefers dark mode", embedding=[1.0] + [0.0] * 383)
         with pytest.raises(ValueError, match="embedding"):
             bank.recall("dark mode preferences")
 

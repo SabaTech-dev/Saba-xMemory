@@ -103,8 +103,8 @@ for mem in hits.memories:
 | Method | Description |
 |--------|-------------|
 | `ensure_bank(mission)` | Create or update the memory bank |
-| `retain(content, fact_type, context, tags, embedding)` | Store a memory (direct store; LLM fact extraction not included) |
-| `recall(query, top_k, query_embedding, fact_types)` | Vector similarity search. Requires `query_embedding`; without it raises `ValueError` (never returns an empty result silently) |
+| `retain(content, fact_type, context, tags, embedding)` | Store a memory. `embedding` optional when an embedding provider is configured (auto-generated) |
+| `recall(query, top_k, query_embedding, fact_types)` | Vector similarity search. Without `query_embedding` it uses the configured provider; with no provider at all it raises `ValueError` (never returns an empty result silently) |
 | `list_memories(limit, offset, ...)` | Paginated listing with filters |
 | `stats()` | Aggregate statistics (counts, confidence distribution) |
 | `delete(memory_id)` | Delete a memory |
@@ -124,6 +124,28 @@ result = bank.recall(
 
 for mem in result.memories:
     print(f"{mem.text[:50]}... (confidence: {mem.confidence})")
+```
+
+### Embedding Providers
+
+Embeddings are pluggable and resolved local-first:
+
+1. Explicit: `MemoryBank(..., embedding_provider=OllamaEmbeddingProvider())` (or any object with `embed`/`dim`).
+2. `XMEMORY_EMBEDDING_PROVIDER` env var: `ollama` | `openai` | `hash` | `none` (disables auto-embedding).
+3. Auto-detect: local Ollama server, then OpenAI (`OPENAI_API_KEY`), then the built-in `HashEmbeddingProvider`.
+
+The hash provider works offline with zero setup (deterministic, lexical-only quality — fine for bootstrapping and tests; use Ollama or OpenAI for semantic quality). The default schema stores `vector(384)`; the OpenAI default model produces 1536 dims, so create the column with the matching dimension if you use it.
+
+```python
+from xmemory import MemoryBank, OllamaEmbeddingProvider
+
+bank = MemoryBank(
+    bank_id="my-agent",
+    db_url="postgresql://localhost/xmemory",
+    embedding_provider=OllamaEmbeddingProvider(model="nomic-embed-text"),
+)
+bank.retain("User prefers dark mode")          # embedding generated automatically
+result = bank.recall("UI preferences")          # query embedded automatically
 ```
 
 ## Data Flow (implemented core)

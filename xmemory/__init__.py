@@ -10,6 +10,23 @@ __author__ = "Jose Manuel Sabarís García"
 __license__ = "MIT"
 
 from xmemory.bank import MemoryBank
+from xmemory.embeddings import (
+    EmbeddingProvider,
+    HashEmbeddingProvider,
+    OllamaEmbeddingProvider,
+    OpenAIEmbeddingProvider,
+    get_provider,
+)
 from xmemory.models import Memory, MemoryStats, RecallResult
 
-__all__ = ["MemoryBank", "Memory", "MemoryStats", "RecallResult"]
+__all__ = [
+    "MemoryBank",
+    "Memory",
+    "MemoryStats",
+    "RecallResult",
+    "EmbeddingProvider",
+    "HashEmbeddingProvider",
+    "OllamaEmbeddingProvider",
+    "OpenAIEmbeddingProvider",
+    "get_provider",
+]
