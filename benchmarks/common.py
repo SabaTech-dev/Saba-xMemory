@@ -165,9 +165,11 @@ class BenchRunner:
         self.index_adjacency(messages)
         return time.time() - start
 
-    def answer_question(self, question: str, options: Optional[list[str]]) -> dict:
+    def answer_question(
+        self, question: str, options: Optional[list[str]], top_k: Optional[int] = None
+    ) -> dict:
         q_emb = self.embedder.embed(question)
-        result = self.bank.recall(question, top_k=TOP_K, query_embedding=q_emb)
+        result = self.bank.recall(question, top_k=top_k or TOP_K, query_embedding=q_emb)
         if self.expand:
             expanded = self.expand_neighbors(result.memories)
         else:
@@ -229,6 +231,7 @@ class BenchRunner:
         qa_items: list[dict[str, Any]],
         concurrency: int = 5,
         progress_every: int = 100,
+        top_k: Optional[int] = None,
     ) -> tuple[list[dict], float]:
         """Answer + judge all QA items. Items need question/answer, optional
         options and category. Returns (records, seconds)."""
@@ -237,7 +240,7 @@ class BenchRunner:
 
         def work(idx: int, item: dict) -> None:
             options = item.get("options")
-            ans = self.answer_question(item["question"], options)
+            ans = self.answer_question(item["question"], options, top_k=top_k)
             correct = self.judge(item["question"], str(item["answer"]), ans["answer"])
             records[idx] = {
                 "question": item["question"],

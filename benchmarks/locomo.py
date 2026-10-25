@@ -149,7 +149,7 @@ def main() -> None:
         ingest_s = runner.ingest_messages(messages)
         print(f"Ingested {len(messages)} units in {ingest_s:.1f}s", flush=True)
 
-        records, qa_s = runner.run_qa(qa_items)
+        records, qa_s = runner.run_qa(qa_items, top_k=args.top_k)
         s = summarize(records)
         print(f"QA done in {qa_s:.1f}s — accuracy: {s['overall']['accuracy']}%")
         for rec, item in zip(records, qa_items):
