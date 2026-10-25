@@ -63,11 +63,57 @@ def conversation_messages(conv: dict) -> list[dict]:
     return messages
 
 
+def _speaker_of(ctx: str) -> str:
+    return ctx.split("|")[0].strip() if "|" in ctx else ""
+
+
+def _session_of(ctx: str) -> str:
+    parts = ctx.split("|")
+    return parts[1].strip() if len(parts) > 1 else ""
+
+
+def chunk_messages(messages: list[dict], size: int) -> list[dict]:
+    """Group consecutive turns of the same session into single memory units.
+
+    Each chunk keeps per-turn speaker attribution inside its text and carries
+    the session date as context, so retrieval returns discourse-level context
+    instead of isolated turns.
+    """
+    out: list[dict] = []
+    group: list[dict] = []
+
+    def flush() -> None:
+        if group:
+            body = "\n".join(f"{_speaker_of(m['context'])}: {m['text']}" for m in group)
+            out.append({"text": body, "context": f"session {_session_of(group[0]['context'])}"})
+
+    for m in messages:
+        if group and (
+            _session_of(m["context"]) != _session_of(group[0]["context"]) or len(group) >= size
+        ):
+            flush()
+            group = []
+        group.append(m)
+    flush()
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="LoCoMo benchmark for xMemory")
     parser.add_argument("--smoke", action="store_true", help="1 conversation, 20 QA items")
     parser.add_argument("--convs", type=int, default=0, help="limit to first N conversations")
     parser.add_argument("--top-k", type=int, default=TOP_K)
+    parser.add_argument(
+        "--chunk",
+        type=int,
+        default=0,
+        help="group N consecutive same-session turns into one memory unit (0 = turn-level)",
+    )
+    parser.add_argument(
+        "--no-neighbors",
+        action="store_true",
+        help="disable neighbor-context expansion of recalled memories",
+    )
     args = parser.parse_args()
 
     data = download_dataset()
@@ -96,8 +142,12 @@ def main() -> None:
         runner = BenchRunner(bank_id=f"locomo-{sample_id}")
         runner.ensure_clean()
         messages = conversation_messages(conv)
+        if args.chunk:
+            messages = chunk_messages(messages, args.chunk)
+        if args.no_neighbors:
+            runner.expand = False
         ingest_s = runner.ingest_messages(messages)
-        print(f"Ingested {len(messages)} turns in {ingest_s:.1f}s", flush=True)
+        print(f"Ingested {len(messages)} units in {ingest_s:.1f}s", flush=True)
 
         records, qa_s = runner.run_qa(qa_items)
         s = summarize(records)
@@ -115,6 +165,11 @@ def main() -> None:
             "benchmark": "locomo",
             "mode": "smoke" if args.smoke else "full",
             "conversations": len(data),
+            "config": {
+                "top_k": args.top_k,
+                "chunk": args.chunk,
+                "neighbors": not args.no_neighbors,
+            },
             "summary": summary,
             "records": all_records,
         },

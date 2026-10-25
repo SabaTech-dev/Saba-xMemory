@@ -72,7 +72,10 @@ def recall(query, limit=10, min_confidence=0.7):
 
 **Steps:**
 1. **Cross-Bank Link**: Connect related memories across different agent banks
-2. **Deduplicate**: Merge duplicate memories (11.45% dedup rate)
+2. **Deduplicate**: Merge duplicate memories (11.45% dedup rate). *Retrieval-time
+   dedup is implemented (`xmemory/bank.py`, `RECALL_DEDUP_THRESHOLD = 0.95`):
+   near-identical results are collapsed after RRF fusion so top-k slots carry
+   diverse evidence.*
 3. **Temporal Archive**: Archive stale memories (> 30 days unused)
 
 **Deduplication Logic:**
@@ -105,6 +108,11 @@ def decay_confidence(memory, days_ago):
     decay_factor = 0.95 ** (days_ago / 30)  # 5% decay per 30 days
     return memory['confidence'] * decay_factor
 ```
+
+*Implemented (`xmemory/bank.py`): `decay_confidence()` plus
+`MemoryBank.evolve()`, which applies the decay in SQL to all scored memories
+of the bank (5% per 30 days since last mention; memories without a confidence
+score are untouched).*
 
 ## Schema Reference
 
