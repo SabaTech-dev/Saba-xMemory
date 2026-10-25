@@ -200,12 +200,17 @@ class BenchRunner:
             "latency_ms": result.latency_ms,
         }
 
-    def judge(self, question: str, reference: str, predicted: str) -> bool:
-        """Direct containment first; LLM judge otherwise."""
+    def judge(self, question: str, reference: str, predicted: str) -> tuple[bool, bool]:
+        """Direct containment first; LLM judge otherwise.
+
+        Returns (correct, judge_call_failed): the second flag distinguishes a
+        genuine INCORRECT verdict from a failed judge endpoint call, so the
+        harness can retry the latter instead of silently scoring it wrong.
+        """
         if predicted.strip() == "__ERROR__" or predicted.startswith("__ERROR__"):
-            return False
+            return False, False  # answer already failed; not a judge failure
         if predicted.strip().lower() == reference.strip().lower():
-            return True
+            return True, False
         prompt = (
             "You are a fair evaluator of a question-answering system.\n\n"
             f"Question: {question}\n"
@@ -224,7 +229,12 @@ class BenchRunner:
             "with exactly one word: CORRECT or INCORRECT."
         )
         out = chat(JUDGE_MODEL, prompt, self.client).strip()
-        return out.upper().endswith("CORRECT") and not out.upper().endswith("INCORRECT")
+        if out.startswith("__ERROR__"):
+            return False, True
+        return (
+            out.upper().endswith("CORRECT") and not out.upper().endswith("INCORRECT"),
+            False,
+        )
 
     def run_qa(
         self,
@@ -239,17 +249,33 @@ class BenchRunner:
         records: list[dict] = [None] * len(qa_items)  # type: ignore[list-item]
 
         def work(idx: int, item: dict) -> None:
-            options = item.get("options")
-            ans = self.answer_question(item["question"], options, top_k=top_k)
-            correct = self.judge(item["question"], str(item["answer"]), ans["answer"])
-            records[idx] = {
-                "question": item["question"],
-                "reference": item["answer"],
-                "predicted": ans["answer"],
-                "correct": correct,
-                "category": item.get("category"),
-                "n_retrieved": len(ans["retrieved"]),
-            }
+            try:
+                options = item.get("options")
+                ans = self.answer_question(item["question"], options, top_k=top_k)
+                correct, judge_error = self.judge(
+                    item["question"], str(item["answer"]), ans["answer"]
+                )
+                records[idx] = {
+                    "question": item["question"],
+                    "reference": item["answer"],
+                    "predicted": ans["answer"],
+                    "correct": correct,
+                    "category": item.get("category"),
+                    "n_retrieved": len(ans["retrieved"]),
+                    "error": ans["answer"].startswith("__ERROR__"),
+                    "judge_error": judge_error,
+                }
+            except Exception as e:  # noqa: BLE001 — one bad item must not kill the run
+                records[idx] = {
+                    "question": item.get("question", ""),
+                    "reference": item.get("answer", ""),
+                    "predicted": f"__ERROR__: {e}",
+                    "correct": False,
+                    "category": item.get("category"),
+                    "n_retrieved": 0,
+                    "error": True,
+                    "judge_error": False,
+                }
 
         with ThreadPoolExecutor(max_workers=concurrency) as ex:
             futures = {ex.submit(work, i, it): i for i, it in enumerate(qa_items)}
@@ -259,12 +285,32 @@ class BenchRunner:
                 done += 1
                 if progress_every and done % progress_every == 0:
                     print(f"  [{self.bank_id}] {done}/{len(qa_items)} QA done", flush=True)
+
+        # Error sweeps: transient endpoint failures (5xx bursts, restarts) must
+        # not silently depress the score. Retry errored items serially, with
+        # low endpoint pressure, before accepting them as failures.
+        for sweep in range(2):
+            todo = [
+                i
+                for i, r in enumerate(records)
+                if r is None or r.get("error") or r.get("judge_error")
+            ]
+            if not todo:
+                break
+            print(
+                f"  [{self.bank_id}] retry sweep {sweep + 1}: {len(todo)} errored item(s)",
+                flush=True,
+            )
+            for i in todo:
+                work(i, qa_items[i])
         return records, time.time() - start
 
 
 def summarize(records: list[dict], category_key: str = "category") -> dict:
     total = [r for r in records if r is not None]
     correct = sum(1 for r in total if r["correct"])
+    answer_errors = sum(1 for r in total if str(r.get("predicted", "")).startswith("__ERROR__"))
+    judge_errors = sum(1 for r in total if r.get("judge_error"))
     by_cat: dict[str, dict[str, int]] = {}
     for r in total:
         cat = str(r.get(category_key))
@@ -276,6 +322,10 @@ def summarize(records: list[dict], category_key: str = "category") -> dict:
             "total": len(total),
             "correct": correct,
             "accuracy": round(correct / len(total) * 100, 2) if total else 0.0,
+            # Validity audit: endpoint errors counted as incorrect (conservative)
+            # but surfaced, so a polluted run is distinguishable from a real score.
+            "answer_errors": answer_errors,
+            "judge_errors": judge_errors,
         },
         "by_category": {
             k: {
