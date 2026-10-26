@@ -64,7 +64,10 @@ For questions about likelihood, preferences, traits or opinions, answer with the
 
 
 def llm_client() -> OpenAI:
-    return OpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY)
+    # timeout 90s + 1 retry de cliente: sin esto, una request colgada (LiteLLM<->vLLM
+    # tras un CUDA OOM) bloquea al worker en read() para siempre y congela as_completed
+    # (audit 26-oct: run congelado en QA 100/199, py-spy: workers en httpcore read).
+    return OpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY, timeout=90.0, max_retries=1)
 
 
 def chat(model: str, prompt: str, client: OpenAI, max_retries: int = 4) -> str:
