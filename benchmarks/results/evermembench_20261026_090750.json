@@ -1,0 +1,183 @@
+{
+  "benchmark": "evermembench-dynamic",
+  "mode": "smoke",
+  "topics": [
+    "01"
+  ],
+  "summary": {
+    "overall": {
+      "total": 20,
+      "correct": 6,
+      "accuracy": 30.0
+    },
+    "by_category": {
+      "open_ended": {
+        "total": 20,
+        "correct": 6,
+        "accuracy": 30.0
+      }
+    }
+  },
+  "records": [
+    {
+      "question": "After SQL optimization of the data submission API, what was the peak CPU usage observed during the final 300 concurrent user stress test?",
+      "reference": "65%",
+      "predicted": "65%",
+      "correct": true,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "In the competitive analysis task for the supply chain carbon footprint project, after Huilan Chen completed the analysis of key competitors (especially EcoTrace), which document management system did she upload the final report to?",
+      "reference": "Confluence",
+      "predicted": "Confluence",
+      "correct": true,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "After completing the configuration of the production environment domain name and SSL certificate, where did Jing Lv upload the final Nginx configuration file and test report?",
+      "reference": "Confluence",
+      "predicted": "Confluence",
+      "correct": true,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "After completing the analysis of the GHG Protocol and the differences across the manufacturing, retail, and energy sectors, what is the full title of the report that Peng Hou finally uploaded to Confluence?",
+      "reference": "Research and Analysis Report on Mainstream Carbon Accounting Standards (GHG Protocol) - V1.0 - Final",
+      "predicted": "Mainstream Carbon Accounting Standard (GHG Protocol) Research and Analysis Report - V1.0 - Final",
+      "correct": false,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "When discussing the design of calculation trigger APIs for the carbon emissions accounting platform, which optional parameter did Ruiqing Jiang suggest adding to flexibly calculate only specific emission categories?",
+      "reference": "An optional `categories` array",
+      "predicted": "categories",
+      "correct": true,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "During the design process of the energy consumption monitoring system, when Guohua Yin reviewed the draft of the alarm list, what specific function did he suggest adding to help operations colleagues quickly pinpoint issues?",
+      "reference": "It is recommended to add an \"Alarm Type\" filter to the list page.",
+      "predicted": "Not mentioned",
+      "correct": false,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "In the energy consumption monitoring project, after Xuexin Yin announced the completion of the database table structure design for sensor metadata and configuration, what was the name of the final design document she uploaded to Confluence?",
+      "reference": "Sensor Metadata and Configuration Table Structure_V1.0",
+      "predicted": "Sensor Metadata and Configuration Table Structure_V1.0",
+      "correct": true,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "When the \"Calculation Engine Accuracy Verification Test\" task was completed, how many emission categories did Guohua Han mention were covered in total in the final summary?",
+      "reference": "15",
+      "predicted": "15 emission categories",
+      "correct": false,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "After reviewing the first draft of the Energy Consumption Monitoring System User Manual, what specific suggestions did Guohua Yin propose to make the explanation of \"benchmark comparison\" in the \"Energy Saving Diagnostic Report\" section more intuitive?",
+      "reference": "It is recommended to add a schematic diagram that was used during the previous UAT.",
+      "predicted": "Adding a schematic diagram used during UAT",
+      "correct": false,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "When discussing the security architecture design for the carbon emissions platform, Mingzhi Li mentioned that which project's cloud service provider evaluation experience could be drawn upon?",
+      "reference": "Energy Consumption Monitoring System",
+      "predicted": "energy consumption monitoring system",
+      "correct": true,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "In the energy consumption monitoring project, which version of the high-level Work Breakdown Structure (WBS) did Jianguo Huang finalize and upload to Confluence?",
+      "reference": "V1.0",
+      "predicted": "__ERROR__: Error code: 500 - {'error': {'message': \"litellm.InternalServerError: InternalServerError: OpenAIException - Connection error.\\n\\nLiteLLM: model group 'mi-qwen38-27b-coldfusion-q4km' failed with the error above. Fallback to mi-qwen38-27b-coldfusion-q4km also failed: litellm.InternalServerError: InternalServerError: OpenAIException - Connection error. LiteLLM Retried: 1 times, LiteLLM Max Retries: 1\", 'type': 'internal_server_error', 'param': None, 'code': '500'}}",
+      "correct": false,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "After conducting a technical assessment of the data quality of the production line energy management system, what is the preliminary estimated number of workdays required for data cleansing and initial verification in the report?",
+      "reference": "At least 10 business days",
+      "predicted": "__ERROR__: Error code: 500 - {'error': {'message': \"litellm.InternalServerError: InternalServerError: OpenAIException - Connection error.\\n\\nLiteLLM: model group 'mi-qwen38-27b-coldfusion-q4km' failed with the error above. Fallback to mi-qwen38-27b-coldfusion-q4km also failed: litellm.InternalServerError: InternalServerError: OpenAIException - Connection error. LiteLLM Retried: 1 times, LiteLLM Max Retries: 1\", 'type': 'internal_server_error', 'param': None, 'code': '500'}}",
+      "correct": false,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "When designing the strategic analysis dashboard for the carbon emissions accounting platform, Jingwei Sun mentioned that a suggestion to highlight key performance indicators (KPIs) year-on-year and month-on-month would be adopted. Who made this suggestion?",
+      "reference": "Peng Hou",
+      "predicted": "__ERROR__: Error code: 500 - {'error': {'message': \"litellm.InternalServerError: InternalServerError: OpenAIException - Connection error.\\n\\nLiteLLM: model group 'mi-qwen38-27b-coldfusion-q4km' failed with the error above. Fallback to mi-qwen38-27b-coldfusion-q4km also failed: litellm.InternalServerError: InternalServerError: OpenAIException - Connection error. LiteLLM Retried: 1 times, LiteLLM Max Retries: 1\", 'type': 'internal_server_error', 'param': None, 'code': '500'}}",
+      "correct": false,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "When configuring alert rules for core business metrics on the carbon emissions accounting platform, what is the threshold for the average response time of critical APIs that will trigger an alert?",
+      "reference": "Over 500ms",
+      "predicted": "__ERROR__: Error code: 500 - {'error': {'message': \"litellm.InternalServerError: InternalServerError: OpenAIException - Connection error.\\n\\nLiteLLM: model group 'mi-qwen38-27b-coldfusion-q4km' failed with the error above. Fallback to mi-qwen38-27b-coldfusion-q4km also failed: litellm.InternalServerError: InternalServerError: OpenAIException - Connection error. LiteLLM Retried: 1 times, LiteLLM Max Retries: 1\", 'type': 'internal_server_error', 'param': None, 'code': '500'}}",
+      "correct": false,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "In the energy consumption monitoring project, when Xinhao Yao finished supplementing the API registration for users with test cases for concurrent scenarios and was ready to submit for testing, what was the final test coverage of this interface?",
+      "reference": "95%",
+      "predicted": "__ERROR__: Error code: 500 - {'error': {'message': \"litellm.InternalServerError: InternalServerError: OpenAIException - Connection error.\\n\\nLiteLLM: model group 'mi-qwen38-27b-coldfusion-q4km' failed with the error above. Fallback to mi-qwen38-27b-coldfusion-q4km also failed: litellm.InternalServerError: InternalServerError: OpenAIException - Connection error. LiteLLM Retried: 1 times, LiteLLM Max Retries: 1\", 'type': 'internal_server_error', 'param': None, 'code': '500'}}",
+      "correct": false,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "In the UI design work for the carbon asset management platform, who is responsible for organizing the review meetings for the UI/UX design proposals?",
+      "reference": "Jianguo Huang",
+      "predicted": "__ERROR__: Error code: 500 - {'error': {'message': \"litellm.InternalServerError: InternalServerError: OpenAIException - Connection error.\\n\\nLiteLLM: model group 'mi-qwen38-27b-coldfusion-q4km' failed with the error above. Fallback to mi-qwen38-27b-coldfusion-q4km also failed: litellm.InternalServerError: InternalServerError: OpenAIException - Connection error. LiteLLM Retried: 1 times, LiteLLM Max Retries: 1\", 'type': 'internal_server_error', 'param': None, 'code': '500'}}",
+      "correct": false,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "Regarding the UI design work for the Carbon Emission Accounting Platform project, who is responsible for organizing the design review meeting scheduled for Thursday afternoon?",
+      "reference": "Jianguo Huang",
+      "predicted": "__ERROR__: Error code: 500 - {'error': {'message': \"litellm.InternalServerError: InternalServerError: OpenAIException - Connection error.\\n\\nLiteLLM: model group 'mi-qwen38-27b-coldfusion-q4km' failed with the error above. Fallback to mi-qwen38-27b-coldfusion-q4km also failed: litellm.InternalServerError: InternalServerError: OpenAIException - Connection error. LiteLLM Retried: 1 times, LiteLLM Max Retries: 1\", 'type': 'internal_server_error', 'param': None, 'code': '500'}}",
+      "correct": false,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "In the deployment task of the energy consumption monitoring system in the production environment, what database did Xuexin Yin ultimately confirm and deploy?",
+      "reference": "PostgreSQL/TimescaleDB",
+      "predicted": "__ERROR__: Error code: 500 - {'error': {'message': \"litellm.InternalServerError: InternalServerError: OpenAIException - Connection error.\\n\\nLiteLLM: model group 'mi-qwen38-27b-coldfusion-q4km' failed with the error above. Fallback to mi-qwen38-27b-coldfusion-q4km also failed: litellm.InternalServerError: InternalServerError: OpenAIException - Connection error. LiteLLM Retried: 1 times, LiteLLM Max Retries: 1\", 'type': 'internal_server_error', 'param': None, 'code': '500'}}",
+      "correct": false,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "In the discussion about the information architecture design of the energy consumption monitoring system, who suggested elevating the \"Alarm Center\" based on user operation flow considerations?",
+      "reference": "Guohua Yin",
+      "predicted": "__ERROR__: Error code: 500 - {'error': {'message': \"litellm.InternalServerError: InternalServerError: OpenAIException - Connection error.\\n\\nLiteLLM: model group 'mi-qwen38-27b-coldfusion-q4km' failed with the error above. Fallback to mi-qwen38-27b-coldfusion-q4km also failed: litellm.InternalServerError: InternalServerError: OpenAIException - Connection error. LiteLLM Retried: 1 times, LiteLLM Max Retries: 1\", 'type': 'internal_server_error', 'param': None, 'code': '500'}}",
+      "correct": false,
+      "category": "open_ended",
+      "n_retrieved": 20
+    },
+    {
+      "question": "When developing the enterprise-side main dashboard page for the Huawei \"Supply Chain Carbon Footprint\" project in Korea, who was the UI designer he collaborated with for UI review and detail optimization?",
+      "reference": "Yang Zhao",
+      "predicted": "__ERROR__: Error code: 500 - {'error': {'message': \"litellm.InternalServerError: InternalServerError: OpenAIException - Connection error.\\n\\nLiteLLM: model group 'mi-qwen38-27b-coldfusion-q4km' failed with the error above. Fallback to mi-qwen38-27b-coldfusion-q4km also failed: litellm.InternalServerError: InternalServerError: OpenAIException - Connection error. LiteLLM Retried: 1 times, LiteLLM Max Retries: 1\", 'type': 'internal_server_error', 'param': None, 'code': '500'}}",
+      "correct": false,
+      "category": "open_ended",
+      "n_retrieved": 20
+    }
+  ]
+}
