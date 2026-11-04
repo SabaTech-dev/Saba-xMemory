@@ -49,6 +49,12 @@ EMBED_MODEL = os.environ.get("XM_EMBED_MODEL", "mi-nomic-embed-text-v2-moe")
 TOP_K = int(os.environ.get("XM_TOP_K", "20"))
 EMBED_DIM = 768
 
+# Degraded mode (FASE 0, card eedb5c3c): measure retrieval only — recall@k via
+# evidence/answer-containment and latency percentiles — skipping the LLM
+# answer + judge phases. Used when the serving endpoint (:8009) is down; the
+# run is recorded as mode=retrieval_only and accuracy stays null.
+RETRIEVAL_ONLY = os.environ.get("XM_RETRIEVAL_ONLY", "0") == "1"
+
 ANSWER_PROMPT = """Here are memories from past conversations.
 
 {memories}
