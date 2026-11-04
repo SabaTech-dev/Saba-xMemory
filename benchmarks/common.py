@@ -57,6 +57,7 @@ Question: {question}
 {options_block}
 Reply with just the answer: a short phrase, a date, a name, a number, or the option text.
 The name before each "|" in a memory line is who said it — do not attribute one speaker's words or experiences to anyone else.
+Lines marked "(neighbor context)" are the turns immediately before/after a recalled memory; use them to connect facts that span several turns, but base your answer on the actual memories.
 For dates and times, convert relative expressions ("last Saturday", "next month") into the absolute date, using the timestamp shown in the memory line.
 If the question asks about one specific person, check the memories actually describe that person; if they only describe a different person doing that thing, reply: Not mentioned.
 For questions about likelihood, preferences, traits or opinions, answer with the most reasonable inference from the memories — the evidence is often indirect, so reason from what is there; only reply "Not mentioned" when truly nothing relevant exists."""
@@ -103,6 +104,47 @@ class BenchRunner:
         )
         self.client = llm_client()
         self.bank_id = bank_id
+        self.expand = True  # neighbor-context expansion of recalled memories
+        # Adjacency index for neighbor-context expansion: dia_id -> (prev, next)
+        self.adjacency: dict[str, tuple[Optional[str], Optional[str]]] = {}
+
+    def index_adjacency(self, messages: list[dict[str, Any]]) -> None:
+        """Index consecutive turns (by dia_id like 'D1:3') so recalled memories
+        can be expanded with their adjacent turns at QA time."""
+        by_id = {}
+        for m in messages:
+            ctx = m.get("context", "")
+            if "|" in ctx:
+                dia = ctx.rsplit("|", 1)[1].strip()
+                if dia:
+                    by_id[dia] = m["text"]
+        ids = sorted(by_id, key=lambda d: (int(d[1:].split(":")[0]), int(d.split(":")[1])))
+        for i, dia in enumerate(ids):
+            prev = (
+                by_id[ids[i - 1]]
+                if i > 0 and ids[i - 1][1:].split(":")[0] == dia[1:].split(":")[0]
+                else None
+            )
+            nxt = (
+                by_id[ids[i + 1]]
+                if i + 1 < len(ids) and ids[i + 1][1:].split(":")[0] == dia[1:].split(":")[0]
+                else None
+            )
+            self.adjacency[dia] = (prev, nxt)
+
+    def expand_neighbors(self, memories: list) -> list[tuple[str, str, bool]]:
+        """Return [(text, context, is_neighbor)] expanding each memory with
+        adjacent turns (neighbors carry the memory's own context line)."""
+        out: list[tuple[str, str, bool]] = []
+        seen = {m.text for m in memories}
+        for m in memories:
+            out.append((m.text, m.context, False))
+            dia = m.context.rsplit("|", 1)[1].strip() if m.context and "|" in m.context else ""
+            for nb in self.adjacency.get(dia, (None, None)):
+                if nb and nb not in seen:
+                    seen.add(nb)
+                    out.append((nb, m.context, True))
+        return out
 
     def ensure_clean(self) -> None:
         self.bank.ensure_bank()
@@ -120,14 +162,22 @@ class BenchRunner:
             embeddings.extend(self.embedder.embed_batch(texts[i : i + batch_size]))
         for m, emb in zip(messages, embeddings):
             self.bank.retain(m["text"], context=m.get("context", ""), embedding=emb)
+        self.index_adjacency(messages)
         return time.time() - start
 
     def answer_question(self, question: str, options: Optional[list[str]]) -> dict:
         q_emb = self.embedder.embed(question)
         result = self.bank.recall(question, top_k=TOP_K, query_embedding=q_emb)
+        if self.expand:
+            expanded = self.expand_neighbors(result.memories)
+        else:
+            expanded = [(m.text, m.context, False) for m in result.memories]
         memories_block = (
             "\n".join(
-                f"- [{m.context}] {m.text}" if m.context else f"- {m.text}" for m in result.memories
+                f"- ({'neighbor context' if is_nb else 'memory'}) [{ctx}] {text}"
+                if ctx
+                else f"- ({'neighbor context' if is_nb else 'memory'}) {text}"
+                for text, ctx, is_nb in expanded
             )
             or "(no memories found)"
         )
@@ -163,7 +213,11 @@ class BenchRunner:
             "reference. Equivalent wording, paraphrases, or a correct subset of "
             "the reference information count as correct. Only judge it incorrect "
             "when it states something contradictory, or fails to answer the "
-            "question.\n\n"
+            "question.\n"
+            "When both answers are dates or relative time expressions (e.g. "
+            "'2022', 'last year', 'the week before 9 June 2023', 'next month'), "
+            "resolve each to an absolute date or period first, then compare: "
+            "same date/period counts as correct even if expressed differently.\n\n"
             "First reason in one short sentence, then reply on the last line "
             "with exactly one word: CORRECT or INCORRECT."
         )

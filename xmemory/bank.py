@@ -15,6 +15,19 @@ from pgvector.psycopg import register_vector
 from xmemory.embeddings import EmbeddingProvider, HashEmbeddingProvider, get_provider
 from xmemory.models import Memory, MemoryStats, RecallResult, RetainRequest, RetainResult
 
+# Cosine similarity above which two retrieved memories are considered
+# near-duplicates and collapsed into one (see docs/architecture.md, dedup logic).
+RECALL_DEDUP_THRESHOLD = 0.95
+
+# Confidence decay: 5% reduction per 30 days without a mention (see
+# docs/architecture.md, evolve pipeline).
+DECAY_RATE_PER_30D = 0.95
+
+
+def decay_confidence(confidence: float, days_ago: float) -> float:
+    """Decay a memory's confidence by age: 5% per 30 days since last mention."""
+    return confidence * (DECAY_RATE_PER_30D ** (days_ago / 30.0))
+
 
 class MemoryBank:
     """
@@ -103,6 +116,7 @@ class MemoryBank:
         context: str = "",
         tags: Optional[list[str]] = None,
         embedding: Optional[list[float]] = None,
+        confidence: Optional[float] = None,
     ) -> RetainResult:
         """
         Store a new memory.
@@ -124,8 +138,8 @@ class MemoryBank:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO memory_units (bank_id, text, fact_type, context, tags, embedding)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO memory_units (bank_id, text, fact_type, context, tags, embedding, confidence_score)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 (
@@ -135,6 +149,7 @@ class MemoryBank:
                     context,
                     tags,
                     np.asarray(embedding, dtype=np.float32) if embedding is not None else None,
+                    confidence,
                 ),
             )
             row = cur.fetchone()
@@ -143,6 +158,7 @@ class MemoryBank:
             id=str(row[0]),
             text=content,
             fact_type=fact_type,
+            confidence=confidence,
         )
 
     # ─── Recall ───────────────────────────────────────────────────────
@@ -199,6 +215,7 @@ class MemoryBank:
             fact_params = list(fact_types)
 
         ranked: dict[str, tuple[float, Memory]] = {}
+        embeddings: dict[str, Optional[np.ndarray]] = {}
 
         def add_leg(rows: list, weight: float = 1.0) -> None:
             for rank, row in enumerate(rows):
@@ -214,6 +231,9 @@ class MemoryBank:
                     access_count=row[8] or 0,
                     metadata=row[9] or {},
                 )
+                if len(row) > 10 and row[10] is not None:
+                    emb_raw = row[10].to_list() if hasattr(row[10], "to_list") else row[10]
+                    embeddings.setdefault(mem.id, np.asarray(emb_raw, dtype=np.float32))
                 rrf = 1.0 / (60.0 + rank + 1)
                 key = mem.id
                 score, prev = ranked.get(key, (0.0, mem))
@@ -221,7 +241,7 @@ class MemoryBank:
 
         select_cols = """
             id, text, fact_type, confidence_score, context,
-            tags, mentioned_at, created_at, access_count, metadata
+            tags, mentioned_at, created_at, access_count, metadata, embedding
         """
 
         with conn.cursor() as cur:
@@ -264,8 +284,32 @@ class MemoryBank:
                 )
                 add_leg(cur.fetchall())
 
-        fused = sorted(ranked.items(), key=lambda kv: kv[1][0], reverse=True)[:top_k]
-        memories = [mem for _, (_, mem) in fused]
+        fused = sorted(ranked.items(), key=lambda kv: kv[1][0], reverse=True)
+
+        # Retrieval-time dedup: collapse near-identical memories so top-k slots
+        # carry diverse evidence instead of repeated variants of one fact.
+        def _is_duplicate(a_id: str, a_text: str, kept: list[tuple[str, str]]) -> bool:
+            a_emb = embeddings.get(a_id)
+            a_norm = " ".join(a_text.lower().split())
+            for b_id, b_text in kept:
+                if a_norm == " ".join(b_text.lower().split()):
+                    return True
+                b_emb = embeddings.get(b_id)
+                if a_emb is not None and b_emb is not None:
+                    denom = float(np.linalg.norm(a_emb) * np.linalg.norm(b_emb))
+                    if denom and float(np.dot(a_emb, b_emb)) / denom > RECALL_DEDUP_THRESHOLD:
+                        return True
+            return False
+
+        kept_refs: list[tuple[str, str]] = []
+        memories = []
+        for _, (_, mem) in fused:
+            if _is_duplicate(mem.id, mem.text, kept_refs):
+                continue
+            kept_refs.append((mem.id, mem.text))
+            memories.append(mem)
+            if len(memories) >= top_k:
+                break
 
         elapsed = (time.time() - start) * 1000
         return RecallResult(
@@ -398,3 +442,30 @@ class MemoryBank:
                 (memory_id, self.bank_id),
             )
             return cur.rowcount > 0
+
+    # ─── Evolve ────────────────────────────────────────────────────────
+
+    def evolve(self) -> int:
+        """Apply confidence decay to scored memories of this bank.
+
+        Each memory with a confidence score loses 5% per 30 days since its
+        last mention (or creation when never mentioned). Memories without a
+        confidence score are left untouched. Returns the number of updated
+        memories.
+        """
+        conn = self._get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE memory_units
+                SET confidence_score = confidence_score * power(
+                    %s,
+                    EXTRACT(EPOCH FROM (NOW() - COALESCE(mentioned_at, created_at)))
+                        / 86400.0 / 30.0
+                )
+                WHERE bank_id = %s
+                  AND confidence_score IS NOT NULL
+                """,
+                (DECAY_RATE_PER_30D, self.bank_id),
+            )
+            return cur.rowcount

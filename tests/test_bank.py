@@ -123,6 +123,21 @@ class TestRecall:
         result = bank.recall("test", query_embedding=self.EMBED)
         assert result.latency_ms >= 0
 
+    def test_recall_dedups_near_identical_memories(self, bank):
+        """Near-duplicate memories (cosine > 0.95) must not both occupy top-k
+        slots: retrieval collapses them and frees room for diverse results."""
+        vec_a = [1.0] + [0.0] * 383
+        vec_a2 = [0.999, 0.03] + [0.0] * 382  # cosine ~0.9995 with vec_a
+        vec_b = [0.0, 1.0] + [0.0] * 382
+        bank.retain("Dedup probe: I love hiking in the mountains", embedding=vec_a)
+        bank.retain("Dedup probe: I love hiking in the mountains!", embedding=vec_a2)
+        bank.retain("Dedup probe: quarterly budget review in March", embedding=vec_b)
+        result = bank.recall("hiking mountains", query_embedding=vec_a, top_k=3)
+        hiking = [m.text for m in result.memories if "hiking" in m.text]
+        assert len(hiking) == 1  # the near-duplicate pair collapsed
+        # the freed slot lets the distinct memory in
+        assert any("budget review" in m.text for m in result.memories)
+
 
 # ─── List Tests ───────────────────────────────────────────────────────
 
@@ -195,3 +210,48 @@ class TestModels:
             active_memories=80,
         )
         assert s.total_memories == 100
+
+
+# ─── Evolve Tests (confidence decay) ──────────────────────────────────
+
+
+class TestEvolve:
+    def test_decay_confidence_formula(self):
+        from xmemory.bank import decay_confidence
+
+        assert decay_confidence(1.0, 0) == 1.0
+        assert abs(decay_confidence(1.0, 60) - 0.95**2) < 1e-9
+        assert abs(decay_confidence(0.8, 30) - 0.8 * 0.95) < 1e-9
+
+    def test_evolve_decays_old_memories(self, bank):
+        bank.retain("Evolve probe: old fact about sailing", confidence=1.0)
+        bank.retain("Evolve probe: fresh fact about sailing", confidence=1.0)
+        conn = bank._get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE memory_units
+                SET created_at = NOW() - INTERVAL '60 days',
+                    mentioned_at = NOW() - INTERVAL '60 days'
+                WHERE bank_id = %s AND text LIKE '%%old fact%%'
+                """,
+                (bank.bank_id,),
+            )
+        updated = bank.evolve()
+        assert updated >= 1
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT text, confidence_score FROM memory_units
+                WHERE bank_id = %s AND text LIKE 'Evolve probe%%'
+                """,
+                (bank.bank_id,),
+            )
+            rows = cur.fetchall()
+        confs = {text: float(conf) for text, conf in rows}
+        assert abs(confs["Evolve probe: old fact about sailing"] - 0.95**2) < 0.01
+        assert abs(confs["Evolve probe: fresh fact about sailing"] - 1.0) < 1e-6
+
+    def test_evolve_ignores_memories_without_confidence(self, bank):
+        before = bank.evolve()
+        assert isinstance(before, int)  # memories with NULL confidence untouched
